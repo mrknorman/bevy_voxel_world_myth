@@ -125,7 +125,8 @@ impl VoxelWorldConfig for MainWorld {
                             material_types.extend(std::iter::repeat(material_type).take(4));
                         }
                     }
-
+                    let has_tris = !indices.is_empty();          // true if ≥ 1 triangle
+                    
                     let mut render_mesh = Mesh::new(
                         PrimitiveTopology::TriangleList,
                         RenderAssetUsages::RENDER_WORLD,

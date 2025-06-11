@@ -1,4 +1,4 @@
-mod chunk;
+pub mod chunk;
 mod chunk_map;
 mod configuration;
 mod debug_draw;

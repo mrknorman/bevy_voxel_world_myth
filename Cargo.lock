@@ -1272,6 +1272,7 @@ version = "0.12.0"
 dependencies = [
  "ahash 0.8.11",
  "bevy",
+ "binary-greedy-meshing",
  "block-mesh",
  "futures-lite",
  "hashbrown",
@@ -1336,6 +1337,12 @@ dependencies = [
  "wgpu-types",
  "winit",
 ]
+
+[[package]]
+name = "binary-greedy-meshing"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "17f73b45cc178ef2c2c1246231451ba67412ded43f0d21f7df3f2bc0559d802c"
 
 [[package]]
 name = "bindgen"

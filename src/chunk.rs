@@ -16,7 +16,7 @@ use crate::{
 
 // The size of a chunk in voxels
 // TODO: implement a way to change this though the configuration
-pub const CHUNK_SIZE_U: u32 = 32;
+pub const CHUNK_SIZE_U: u32 = 62;
 pub const CHUNK_SIZE_I: i32 = CHUNK_SIZE_U as i32;
 pub const CHUNK_SIZE_F: f32 = CHUNK_SIZE_U as f32;
 
