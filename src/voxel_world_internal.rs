@@ -8,6 +8,7 @@ use bevy::{
     prelude::*,
     tasks::AsyncComputeTaskPool,
 };
+use big_space::{grid::Grid, prelude::{BigSpace, BigSpaceCommands, FloatingOrigin, GridCell}};
 use futures_lite::future;
 use std::{
     collections::VecDeque,
@@ -27,7 +28,7 @@ use crate::{
     voxel_world::{
         get_chunk_voxel_position, ChunkWillDespawn, ChunkWillRemesh, ChunkWillSpawn,
         ChunkWillUpdate, VoxelWorldCamera,
-    },
+    }
 };
 
 #[derive(SystemParam, Deref)]
@@ -73,7 +74,7 @@ where
     C: VoxelWorldConfig,
 {
     /// Init the resources used internally by bevy_voxel_world
-    pub fn setup(mut commands: Commands, configuration: Res<C>) {
+    pub fn setup(mut commands: Commands) {
         commands.init_resource::<ChunkMap<C, C::MaterialIndex>>();
         commands.init_resource::<ChunkMapInsertBuffer<C, C::MaterialIndex>>();
         commands.init_resource::<ChunkMapUpdateBuffer<C, C::MaterialIndex>>();
@@ -82,16 +83,28 @@ where
         commands.init_resource::<MeshCacheInsertBuffer<C>>();
         commands.init_resource::<ModifiedVoxels<C, C::MaterialIndex>>();
         commands.init_resource::<VoxelWriteBuffer<C, C::MaterialIndex>>();
+    }
+    
+    pub fn setup_world_root(
+        mut commands: Commands,
+        configuration: Res<C>,
+    ) {
+        let mut world_root = Entity::PLACEHOLDER; // Placeholder for the root entity
 
-        // Create the root node and allow to modify it by the configuration.
-        let world_root = commands
-            .spawn((
-                WorldRoot::<C>(PhantomData),
-                Visibility::default(),
-                Transform::default(),
-            ))
-            .id();
-        configuration.init_root(commands, world_root)
+        commands.spawn_big_space_default(
+            | root | {
+                world_root = root.spawn_spatial((
+                    Grid::default(),
+                    Visibility::Visible,
+                    WorldRoot::<C>(PhantomData),
+                    children![
+                        FloatingOrigin
+                    ]
+                )).id();
+            }
+        );
+
+        configuration.init_root(commands, world_root);
     }
 
     /// Find and spawn chunks in need of spawning
@@ -199,8 +212,15 @@ where
                 &chunk_map_read_lock,
             );
 
-            if !has_chunk {
-                let chunk_entity = commands.spawn(NeedsRemesh).id();
+           if !has_chunk {
+                // Calculate which grid cell this chunk should be in
+                let chunk_world_pos = chunk_position.as_vec3() * CHUNK_SIZE_F - 1.0;
+                let grid_cell = GridCell::default(); // Starts at origin cell
+                
+                let chunk_entity = commands.spawn((
+                    NeedsRemesh,
+                    grid_cell,  // Add GridCell component
+                )).id();
                 commands.entity(world_root).add_child(chunk_entity);
                 let chunk = Chunk::<C>::new(chunk_position, chunk_entity);
 
@@ -209,11 +229,9 @@ where
 
                 commands.entity(chunk.entity).try_insert((
                     chunk,
-                    Transform::from_translation(
-                        chunk_position.as_vec3() * CHUNK_SIZE_F - 1.0,
-                    ),
+                    Transform::from_translation(chunk_world_pos),
                 ));
-            } else {
+    }       else {
                 continue;
             }
 

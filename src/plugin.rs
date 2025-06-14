@@ -6,6 +6,8 @@ use bevy::{
     render::render_asset::RenderAssetUsages,
 };
 
+use big_space::prelude::*;
+
 use crate::{
     configuration::{DefaultWorld, VoxelWorldConfig},
     voxel_material::{
@@ -99,7 +101,7 @@ where
 {
     fn build(&self, app: &mut App) {
         app.init_resource::<C>()
-            .add_systems(PreStartup, Internals::<C>::setup)
+            .add_systems(Startup, (Internals::<C>::setup, Internals::<C>::setup_world_root))
             .add_systems(
                 PreUpdate,
                 (

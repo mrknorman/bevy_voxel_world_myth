@@ -1,3 +1,5 @@
+use bevy::ecs::{entity::Entity, resource::Resource};
+
 pub mod chunk;
 mod chunk_map;
 mod configuration;

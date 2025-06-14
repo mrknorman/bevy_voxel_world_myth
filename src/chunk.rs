@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     prelude::{ChunkMeshingFn, TextureIndexMapperFn, VoxelWorldConfig},
-    voxel::WorldVoxel,
+    voxel::{WorldVoxel, VOXEL_SIZE},
     voxel_world_internal::ModifiedVoxels,
 };
 
@@ -217,6 +217,21 @@ impl<C> Chunk<C> {
         let min = Vec3::ZERO;
         let max = min + Vec3::splat(CHUNK_SIZE_F);
         Aabb::from_min_max(min, max)
+    }
+
+     pub fn world_to_chunk_pos(world_pos: Vec3) -> IVec3 {
+        (world_pos / CHUNK_SIZE_F).floor().as_ivec3()
+    }
+    
+    /// Get the world transform for a chunk at logical position
+    pub fn chunk_to_world_transform(chunk_pos: IVec3) -> Transform {
+        Transform::from_translation(chunk_pos.as_vec3() * CHUNK_SIZE_F)
+    }
+    
+    /// Get voxel position within a chunk (0..CHUNK_SIZE)
+    pub fn world_to_voxel_in_chunk(world_pos: Vec3) -> IVec3 {
+        let chunk_origin = Self::world_to_chunk_pos(world_pos).as_vec3() * CHUNK_SIZE_F;
+        ((world_pos - chunk_origin) / VOXEL_SIZE).floor().as_ivec3()
     }
 }
 
