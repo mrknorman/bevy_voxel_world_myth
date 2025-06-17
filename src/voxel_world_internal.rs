@@ -32,8 +32,8 @@ use crate::{
 };
 
 #[derive(SystemParam, Deref)]
-pub struct CameraInfo<'w, 's, C: VoxelWorldConfig>(
-    Query<'w, 's, (&'static Camera, &'static GlobalTransform), With<VoxelWorldCamera<C>>>,
+pub struct CameraInfo<'w, C: VoxelWorldConfig>(
+    Single<'w, (&'static Camera, &'static GlobalTransform), With<VoxelWorldCamera<C>>>,
 );
 
 /// Holds a map of modified voxels that will persist between chunk spawn/despawn
@@ -111,17 +111,13 @@ where
     pub fn spawn_chunks(
         mut commands: Commands,
         mut chunk_map_insert_buffer: ResMut<ChunkMapInsertBuffer<C, C::MaterialIndex>>,
-        world_root: Query<Entity, With<WorldRoot<C>>>,
+        world_root: Single<Entity, With<WorldRoot<C>>>,
         chunk_map: Res<ChunkMap<C, C::MaterialIndex>>,
         configuration: Res<C>,
         camera_info: CameraInfo<C>,
     ) {
-        // Panic if no root exists as it is already inserted in the setup.
-        let world_root = world_root.single().unwrap();
+        let (camera, cam_gtf) = **camera_info;
 
-        let Ok((camera, cam_gtf)) = camera_info.single() else {
-            return;
-        };
         let cam_pos = cam_gtf.translation().as_ivec3();
 
         let spawning_distance = configuration.spawning_distance() as i32;
@@ -221,7 +217,7 @@ where
                     NeedsRemesh,
                     grid_cell,  // Add GridCell component
                 )).id();
-                commands.entity(world_root).add_child(chunk_entity);
+                commands.entity(*world_root).add_child(chunk_entity);
                 let chunk = Chunk::<C>::new(chunk_position, chunk_entity);
 
                 chunk_map_insert_buffer
@@ -265,7 +261,7 @@ where
         let spawning_distance = configuration.spawning_distance() as i32;
         let spawning_distance_squared = spawning_distance.pow(2);
 
-        let (_, cam_gtf) = camera_info.single().unwrap();
+        let (_, cam_gtf) = **camera_info;
         let cam_pos = cam_gtf.translation().as_ivec3();
 
         let chunk_at_camera = cam_pos / CHUNK_SIZE_I;
@@ -489,39 +485,46 @@ where
         }
     }
 
-    pub fn flush_voxel_write_buffer(
+   pub fn flush_voxel_write_buffer(
         mut commands: Commands,
         mut buffer: ResMut<VoxelWriteBuffer<C, C::MaterialIndex>>,
         mut ev_chunk_will_update: EventWriter<ChunkWillUpdate<C>>,
         chunk_map: Res<ChunkMap<C, C::MaterialIndex>>,
         modified_voxels: ResMut<ModifiedVoxels<C, C::MaterialIndex>>,
     ) {
-        let chunk_map_read_lock = chunk_map.get_read_lock();
+        let chunk_map_read = chunk_map.get_read_lock();
         let mut modified_voxels = modified_voxels.write().unwrap();
 
-        let mut updated_chunks = HashSet::<(Entity, IVec3)>::new();
+        let mut updated_chunks = HashSet::<(Entity, IVec3)>::with_capacity(buffer.len());
 
-        for (position, voxel) in buffer.iter() {
-            let (chunk_pos, _vox_pos) = get_chunk_voxel_position(*position);
-            modified_voxels.insert(*position, *voxel);
+        // One iterator pass over all pending writes -----------------------
+        {
+            let commands = &mut commands;
 
-            // Mark the chunk as needing remeshing or spawn a new chunk if it doesn't exist
-            if let Some(chunk_data) =
-                ChunkMap::<C, C::MaterialIndex>::get(&chunk_pos, &chunk_map_read_lock)
-            {
-                if let Ok(mut ent) = commands.get_entity(chunk_data.entity) {
-                    ent.try_insert(NeedsRemesh);
-                    updated_chunks.insert((chunk_data.entity, chunk_pos));
+            buffer.drain(..).for_each(|(position, voxel)| {
+                modified_voxels.insert(position, voxel);
+
+                let (chunk_pos, _) = get_chunk_voxel_position(position);
+
+                if let Some(chunk_data) =
+                    ChunkMap::<C, C::MaterialIndex>::get(&chunk_pos, &chunk_map_read)
+                {
+                    if updated_chunks.insert((chunk_data.entity, chunk_pos)) {
+                        if let Ok(mut ent) = commands.get_entity(chunk_data.entity) {
+                            ent.try_insert(NeedsRemesh);
+                        }
+                    }
                 }
-            }
+            });
         }
 
-        for (entity, chunk_pos) in updated_chunks {
-            ev_chunk_will_update.write(ChunkWillUpdate::<C>::new(chunk_pos, entity));
-        }
-
-        buffer.clear();
+        updated_chunks
+            .into_iter()
+            .for_each(|(entity, chunk_pos)| {
+                ev_chunk_will_update.write(ChunkWillUpdate::<C>::new(chunk_pos, entity));
+            });
     }
+
 
     pub fn flush_mesh_cache_buffers(
         mut mesh_cache_insert_buffer: ResMut<MeshCacheInsertBuffer<C>>,
