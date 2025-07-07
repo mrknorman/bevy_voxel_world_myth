@@ -94,7 +94,10 @@ where
         commands.spawn_big_space_default(
             | root | {
                 world_root = root.spawn_spatial((
-                    Grid::default(),
+                    Grid::new(
+                        64.0 * 62.0,
+                        0.0
+                    ),
                     Visibility::Visible,
                     WorldRoot::<C>(PhantomData),
                     children![
