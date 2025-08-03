@@ -5,10 +5,11 @@ use crate::chunk::VoxelArray;
 use crate::meshing::generate_chunk_mesh;
 use crate::voxel::WorldVoxel;
 use bevy::prelude::*;
+use big_space::prelude::GridCell;
 
 pub type VoxelLookupFn<I = u8> = Box<dyn FnMut(IVec3) -> WorldVoxel<I> + Send + Sync>;
 pub type VoxelLookupDelegate<I = u8> =
-    Box<dyn Fn(IVec3) -> VoxelLookupFn<I> + Send + Sync>;
+    Box<dyn Fn(IVec3, GridCell) -> VoxelLookupFn<I> + Send + Sync>;
 
 pub type TextureIndexMapperFn<I = u8> = Arc<dyn Fn(I) -> [u32; 3] + Send + Sync>;
 
@@ -118,7 +119,8 @@ pub trait VoxelWorldConfig: Resource + Default + Clone {
     /// return a function that can be called to check if a voxel exists at a given position. This function
     /// needs to be thread-safe, since chunk computation happens on a separate thread.
     fn voxel_lookup_delegate(&self) -> VoxelLookupDelegate<Self::MaterialIndex> {
-        Box::new(|_| Box::new(|_| WorldVoxel::Unset))
+        Box::new(|_chunk_pos, _grid_cell| Box::new(|_voxel_pos| WorldVoxel::Unset))
+        //                    ^^^^^^^^^^^ new parameter
     }
 
     /// A function that returns a function that computes the mesh for a chunk

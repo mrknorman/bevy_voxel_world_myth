@@ -1,6 +1,7 @@
 use bevy::{
     platform::collections::HashSet, prelude::*, render::primitives::Aabb, tasks::Task,
 };
+use big_space::prelude::GridCell;
 use ndshape::{ConstShape, ConstShape3u32};
 use std::{
     hash::{Hash, Hasher},
@@ -29,7 +30,7 @@ pub type VoxelArray<I> = [WorldVoxel<I>; PaddedChunkShape::SIZE as usize];
 
 #[derive(Component)]
 #[component(storage = "SparseSet")]
-pub(crate) struct ChunkThread<C: VoxelWorldConfig, I>(
+pub struct ChunkThread<C: VoxelWorldConfig, I>(
     pub Task<ChunkTask<C, I>>,
     PhantomData<C>,
 );
@@ -192,14 +193,16 @@ impl<I: Hash + Copy + PartialEq> Default for ChunkData<I> {
 #[derive(Component, Clone)]
 pub struct Chunk<C> {
     pub position: IVec3,
+    pub cell : GridCell,
     pub entity: Entity,
     _marker: PhantomData<C>,
 }
 
 impl<C> Chunk<C> {
-    pub fn new(position: IVec3, entity: Entity) -> Self {
+    pub fn new(position: IVec3, cell : GridCell, entity: Entity) -> Self {
         Self {
             position,
+            cell,
             entity,
             _marker: PhantomData,
         }
@@ -208,6 +211,7 @@ impl<C> Chunk<C> {
     pub fn from(chunk: &Chunk<C>) -> Self {
         Self {
             position: chunk.position,
+            cell : chunk.cell,
             entity: chunk.entity,
             _marker: PhantomData,
         }

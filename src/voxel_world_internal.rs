@@ -8,7 +8,7 @@ use bevy::{
     prelude::*,
     tasks::AsyncComputeTaskPool,
 };
-use big_space::{grid::Grid, prelude::{BigSpace, BigSpaceCommands, FloatingOrigin, GridCell}};
+use big_space::{grid::Grid, prelude::{ BigSpaceCommands, FloatingOrigin, GridCell}};
 use futures_lite::future;
 use std::{
     collections::VecDeque,
@@ -115,11 +115,14 @@ where
         mut commands: Commands,
         mut chunk_map_insert_buffer: ResMut<ChunkMapInsertBuffer<C, C::MaterialIndex>>,
         world_root: Single<Entity, With<WorldRoot<C>>>,
+        world_root_grid: Single<&Grid, With<WorldRoot<C>>>,
         chunk_map: Res<ChunkMap<C, C::MaterialIndex>>,
         configuration: Res<C>,
+        player_grid : Single<&mut GridCell, With<FloatingOrigin>>,
         camera_info: CameraInfo<C>,
     ) {
         let (camera, cam_gtf) = **camera_info;
+        let grid = *world_root_grid;
 
         let cam_pos = cam_gtf.translation().as_ivec3();
 
@@ -211,26 +214,30 @@ where
                 &chunk_map_read_lock,
             );
 
-           if !has_chunk {
-                // Calculate which grid cell this chunk should be in
-                let chunk_world_pos = chunk_position.as_vec3() * CHUNK_SIZE_F - 1.0;
-                let grid_cell = GridCell::default(); // Starts at origin cell
+            if !has_chunk {
+                // Calculate chunk world position and proper grid cell
+                let chunk_world_pos = chunk_position.as_vec3() * CHUNK_SIZE_F;
                 
+                // Use Grid::translation_to_grid to calculate the correct GridCell and Transform
+                let (grid_cell, local_transform) = grid.translation_to_grid(chunk_world_pos.as_dvec3());  
+
+                let cell = player_grid.clone() + grid_cell;          
                 let chunk_entity = commands.spawn((
                     NeedsRemesh,
-                    grid_cell,  // Add GridCell component
+                    cell,  // Use calculated GridCell
                 )).id();
+                
                 commands.entity(*world_root).add_child(chunk_entity);
-                let chunk = Chunk::<C>::new(chunk_position, chunk_entity);
+                let chunk = Chunk::<C>::new(chunk_position, cell, chunk_entity);
 
                 chunk_map_insert_buffer
                     .push((chunk_position, ChunkData::with_entity(chunk.entity)));
 
                 commands.entity(chunk.entity).try_insert((
                     chunk,
-                    Transform::from_translation(chunk_world_pos),
+                    Transform::from_translation(local_transform),
                 ));
-    }       else {
+            } else {
                 continue;
             }
 
@@ -336,7 +343,7 @@ where
         let thread_pool = AsyncComputeTaskPool::get();
 
         for chunk in dirty_chunks.iter() {
-            let voxel_data_fn = (configuration.voxel_lookup_delegate())(chunk.position);
+            let voxel_data_fn = (configuration.voxel_lookup_delegate())(chunk.position, chunk.cell);
             let chunk_meshing_fn = (configuration
                 .chunk_meshing_delegate()
                 .unwrap_or(Box::new(default_chunk_meshing_delegate)))(
